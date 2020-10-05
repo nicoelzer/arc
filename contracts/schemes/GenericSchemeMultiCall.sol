@@ -31,6 +31,13 @@ contract GenericSchemeMultiCall is VotingMachineCallbacks, ProposalExecuteInterf
     address[] public whitelistedContracts;
     Avatar public avatar;
 
+    uint256 public deploymentTimestamp;
+    uint256 public periodSize;
+    uint256 public periodLimitWei;
+    uint256 public periodLimitTokens;
+    mapping(uint256=>uint256) periodSpendingWei;
+    mapping(uint256=>uint256) periodSpendingTokens;
+
     event NewMultiCallProposal(
         address indexed _avatar,
         bytes32 indexed _proposalId,
@@ -73,7 +80,10 @@ contract GenericSchemeMultiCall is VotingMachineCallbacks, ProposalExecuteInterf
         Avatar _avatar,
         IntVoteInterface _votingMachine,
         bytes32 _voteParams,
-        address[] calldata _contractWhitelist
+        address[] calldata _contractWhitelist,
+        uint256 _periodSize,
+        uint256 _periodLimitWei,
+        uint256 _periodLimitTokens
     )
     external
     {
@@ -83,6 +93,9 @@ contract GenericSchemeMultiCall is VotingMachineCallbacks, ProposalExecuteInterf
         avatar = _avatar;
         votingMachine = _votingMachine;
         voteParams = _voteParams;
+        periodSize = _periodSize;
+        periodLimitWei = _periodLimitWei;
+        periodLimitTokens = _periodLimitTokens;
         /* Whitelist controller by default*/
         Controller controller = Controller(_avatar.owner());
         whitelistedContracts.push(address(controller));
@@ -131,8 +144,12 @@ contract GenericSchemeMultiCall is VotingMachineCallbacks, ProposalExecuteInterf
         bytes memory genericCallReturnValue;
         bool success;
         Controller controller = Controller(whitelistedContracts[0]);
+        uint256 observervationIndex = observationIndexOf(block.timestamp);
 
         for (uint i = 0; i < proposal.contractsToCall.length; i++) {
+            require(periodSpendingWei[observervationIndex].add(proposal.values[i]) <= periodLimitWei, "periodSpendingWeiExceeded");
+            periodSpendingWei[observervationIndex] = periodSpendingWei[observervationIndex].add(proposal.values[i]);
+
             bytes memory callData = proposal.callsData[i];
             if (proposal.contractsToCall[i] == address(controller)) {
                 (IERC20 extToken,
@@ -143,6 +160,9 @@ contract GenericSchemeMultiCall is VotingMachineCallbacks, ProposalExecuteInterf
                     callData,
                     (IERC20, address, uint256)
                 );
+                require(periodSpendingTokens[observervationIndex].add(valueToSpend) <= periodLimitTokens, "periodSpendingTokensExceeded");
+                periodSpendingTokens[observervationIndex] = periodSpendingTokens[observervationIndex].add(valueToSpend);
+
                 success = controller.externalTokenApproval(extToken, spender, valueToSpend, avatar);
             } else {
                 (success, genericCallReturnValue) =
@@ -221,4 +241,10 @@ contract GenericSchemeMultiCall is VotingMachineCallbacks, ProposalExecuteInterf
 
         emit NewMultiCallProposal(address(avatar), proposalId, _callsData, _values, _descriptionHash, _contractsToCall);
     }
+
+    function observationIndexOf(uint256 timestamp) public view returns (uint256 index) {
+        uint256 epochPeriod = timestamp / periodSize;
+        return uint256(epochPeriod % periodSize);
+    }
+
 }
