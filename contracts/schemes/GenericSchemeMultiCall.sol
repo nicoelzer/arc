@@ -31,7 +31,6 @@ contract GenericSchemeMultiCall is VotingMachineCallbacks, ProposalExecuteInterf
     address[] public whitelistedContracts;
     Avatar public avatar;
 
-    uint256 public deploymentTimestamp;
     uint256 public periodSize;
     uint256 public periodLimitWei;
     uint256 public periodLimitTokens;
