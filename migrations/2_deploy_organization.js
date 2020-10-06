@@ -9,20 +9,21 @@ var ContributionReward = artifacts.require('./ContributionReward.sol');
 var UpgradeScheme = artifacts.require('./UpgradeScheme.sol');
 var ControllerCreator = artifacts.require('./ControllerCreator.sol');
 var DAOTracker = artifacts.require('./DAOTracker.sol');
+var WalletScheme = artifacts.require('./WalletScheme.sol');
+var ERC20Guild = artifacts.require('./ERC20Guild.sol');
+var ERC20GuildPermissioned = artifacts.require('./ERC20GuildPermissioned.sol');
 const NULL_ADDRESS = '0x0000000000000000000000000000000000000000';
 
-
 // TEST_ORGANIZATION ORG parameters:
-const orgName = "TEST_ORGANIZATION";
-const tokenName = "TestToken";
-const tokenSymbol = "TST";
+const orgName = "DXdao"; 
+const tokenName = "DXDNative";
+const tokenSymbol = "DXDN";
 const founders = [];
 const initRep = web3.utils.toWei("10");
 const initRepInWei = [initRep];
 const initToken = web3.utils.toWei("1000");
 const initTokenInWei = [initToken];
 const cap = web3.utils.toWei("100000000","ether");
-
 
 
 // DAOstack parameters for universal schemes:
@@ -32,13 +33,13 @@ const votePrec = 50;
 var accounts;
 
 //Deploy test organization with the following schemes:
-//schemeRegistrar, upgradeScheme,globalConstraintRegistrar,simpleICO,contributionReward.
+//schemeRegistrar, upgradeScheme,globalConstraintRegistrar,contributionReward.
 module.exports = async function(deployer) {
     deployer.deploy(ControllerCreator, {gas: constants.ARC_GAS_LIMIT}).then(async function(){
       await deployer.deploy(DAOTracker, {gas: constants.ARC_GAS_LIMIT});
       var daoTracker = await DAOTracker.deployed();
       var controllerCreator = await ControllerCreator.deployed();
-      await deployer.deploy(DaoCreator,controllerCreator.address,daoTracker.address, {gas: constants.ARC_GAS_LIMIT});
+      const deployTX = await deployer.deploy(DaoCreator,controllerCreator.address,daoTracker.address, {gas: constants.ARC_GAS_LIMIT});
       var daoCreatorInst = await DaoCreator.deployed(controllerCreator.address,{gas: constants.ARC_GAS_LIMIT});
       // Create DAOstack:
 
@@ -46,6 +47,10 @@ module.exports = async function(deployer) {
       founders[0] = accounts[0];
       var returnedParams = await daoCreatorInst.forgeOrg(orgName, tokenName, tokenSymbol, founders,
           initTokenInWei, initRepInWei,cap,{gas: constants.ARC_GAS_LIMIT});
+      var txHash = returnedParams.tx
+      var receipt = await web3.eth.getTransactionReceipt(txHash)
+      console.log(receipt.logs)
+
       var AvatarInst = await Avatar.at(returnedParams.logs[0].args._avatar);
       await deployer.deploy(AbsoluteVote,{gas: constants.ARC_GAS_LIMIT});
       // Deploy AbsoluteVote:
@@ -59,6 +64,15 @@ module.exports = async function(deployer) {
       // Deploy UniversalGCScheme register:
       await deployer.deploy(GlobalConstraintRegistrar);
       var globalConstraintRegistrarInst = await GlobalConstraintRegistrar.deployed();
+      // Deploy WalletScheme:
+      await deployer.deploy(WalletScheme);
+      var WalletSchemeInst = await WalletScheme.deployed();
+      // Deploy ERC20Guild:
+      await deployer.deploy(ERC20Guild);
+      var ERC20GuildInst = await ERC20Guild.deployed();
+      // Deploy ERC20GuildPermissioned:
+      await deployer.deploy(ERC20GuildPermissioned);
+      var ERC20GuildPermissionedInst = await ERC20GuildPermissioned.deployed();
 
       await deployer.deploy(ContributionReward);
       var contributionRewardInst = await ContributionReward.deployed();
@@ -91,4 +105,6 @@ module.exports = async function(deployer) {
         permissionArray,
         "metaData");
      });
+
+     
   };

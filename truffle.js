@@ -1,8 +1,12 @@
+const HDWalletProvider = require('truffle-hdwallet-provider')	
 require("babel-polyfill");
 require("babel-register")({
   "presets": ["es2015"],
   "plugins": ["syntax-async-functions","transform-regenerator"]
 });
+require('dotenv').config();
+mnemonic = process.env.KEY_MNEMONIC;
+infuraApiKey = process.env.KEY_INFURA_API_KEY;
 
 module.exports = {
   networks: {
@@ -19,10 +23,12 @@ module.exports = {
       gas: 4543760
     },
     rinkeby: {
-      network_id: 4,
-      host: "localhost",
-      port: 8545,
-      gas: 4543760
+      provider: function () {	
+        return new HDWalletProvider(mnemonic, `https://rinkeby.infura.io/v3/${infuraApiKey}`)	
+      },	
+      network_id: '4',	
+      gas: 9000000,	
+      gasPrice: 10000000000 //10 Gwei	
     },
     kovan: {
       network_id: 42,
@@ -62,5 +68,11 @@ module.exports = {
         runs: 200
       }
       }
+  },
+  plugins: [
+    'truffle-plugin-verify'
+  ],
+  api_keys: {
+    etherscan: '6B66EZA1S6B26FCMF4I4DC1FVUZTZKIK2S'
   }
 };
