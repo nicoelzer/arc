@@ -5,7 +5,6 @@ import "@daostack/infra/contracts/votingMachines/IntVoteInterface.sol";
 import "@daostack/infra/contracts/votingMachines/ProposalExecuteInterface.sol";
 import "../votingMachines/VotingMachineCallbacks.sol";
 
-
 /**
  * @title GenericSchemeMultiCall.
  * @dev  A scheme for proposing and executing calls to multiple arbitrary function
@@ -31,11 +30,16 @@ contract GenericSchemeMultiCall is VotingMachineCallbacks, ProposalExecuteInterf
     address[] public whitelistedContracts;
     Avatar public avatar;
 
+    uint256 public initialTimestamp;
     uint256 public periodSize;
     uint256 public periodLimitWei;
+
     uint256 public periodLimitTokens;
-    mapping(uint256=>uint256) periodSpendingWei;
     mapping(uint256=>uint256) periodSpendingTokens;
+
+    mapping(address=>uint256) periodLimitToken;
+    mapping (uint256 => mapping(address => uint256)) public periodSpendingToken;
+    mapping(uint256=>uint256) periodSpendingWei;
 
     event NewMultiCallProposal(
         address indexed _avatar,
@@ -82,27 +86,32 @@ contract GenericSchemeMultiCall is VotingMachineCallbacks, ProposalExecuteInterf
         address[] calldata _contractWhitelist,
         uint256 _periodSize,
         uint256 _periodLimitWei,
-        uint256 _periodLimitTokens
+        address[] calldata _periodLimitTokensAddresses,
+        uint256[] calldata _periodLimitTokensAmounts
     )
     external
     {
         require(avatar == Avatar(0), "can be called only one time");
         require(_avatar != Avatar(0), "avatar cannot be zero");
         require(_contractWhitelist.length > 0, "contractWhitelist cannot be empty");
+        require(_periodSize >= 604800, "periodSize must be at least 7 days");
+        require(_periodLimitTokensAddresses.length == _periodLimitTokensAmounts.length, "invalid length _periodLimitTokensAddresses");
         avatar = _avatar;
         votingMachine = _votingMachine;
         voteParams = _voteParams;
         periodSize = _periodSize;
         periodLimitWei = _periodLimitWei;
-        periodLimitTokens = _periodLimitTokens;
+        initialTimestamp = block.timestamp;
         /* Whitelist controller by default*/
         Controller controller = Controller(_avatar.owner());
         whitelistedContracts.push(address(controller));
         contractWhitelist[address(controller)] = true;
-
         for (uint i = 0; i < _contractWhitelist.length; i++) {
             contractWhitelist[_contractWhitelist[i]] = true;
             whitelistedContracts.push(_contractWhitelist[i]);
+        }
+        for (uint i = 0; i < _periodLimitTokensAmounts.length; i++) {
+            periodLimitToken[_periodLimitTokensAddresses[i]] = _periodLimitTokensAmounts[i];
         }
     }
 
@@ -159,8 +168,9 @@ contract GenericSchemeMultiCall is VotingMachineCallbacks, ProposalExecuteInterf
                     callData,
                     (IERC20, address, uint256)
                 );
-                require(periodSpendingTokens[observervationIndex].add(valueToSpend) <= periodLimitTokens, "periodSpendingTokensExceeded");
-                periodSpendingTokens[observervationIndex] = periodSpendingTokens[observervationIndex].add(valueToSpend);
+                address tokenAddress = address(extToken);
+                require(periodSpendingToken[observervationIndex][tokenAddress].add(valueToSpend) <= periodLimitToken[tokenAddress], "periodSpendingTokensExceeded");
+                periodSpendingToken[observervationIndex][tokenAddress] = periodSpendingToken[observervationIndex][tokenAddress].add(valueToSpend);
 
                 success = controller.externalTokenApproval(extToken, spender, valueToSpend, avatar);
             } else {
@@ -241,9 +251,8 @@ contract GenericSchemeMultiCall is VotingMachineCallbacks, ProposalExecuteInterf
         emit NewMultiCallProposal(address(avatar), proposalId, _callsData, _values, _descriptionHash, _contractsToCall);
     }
 
-    function observationIndexOf(uint256 timestamp) public view returns (uint256 index) {
-        uint256 epochPeriod = timestamp / periodSize;
-        return uint256(epochPeriod % periodSize);
+    function observationIndexOf(uint256 timestamp) public view returns (uint256) {
+        return uint8((timestamp-initialTimestamp) / periodSize);
     }
 
 }

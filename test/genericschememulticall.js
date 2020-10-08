@@ -18,7 +18,7 @@ const setupGenericSchemeParams = async function(
                                             accounts,
                                             contractWhitelist,
                                             genesisProtocol = false,
-                                            tokenAddress = 0,
+                                            tokenAddress = helpers.NULL_ADDRESS,
                                             avatar
                                             ) {
   var genericSchemeParams = new GenericSchemeParams();
@@ -33,7 +33,8 @@ const setupGenericSchemeParams = async function(
             contractWhitelist,
             constants.PERIOD_SIZE,
             constants.PERIOD_LIMIT_WEI, 
-            constants.PERIOD_LIMIT_TOKENS);
+            [tokenAddress],
+            [constants.PERIOD_LIMIT_TOKENS]);
     }
   else {
       genericSchemeParams.votingMachine = await helpers.setupAbsoluteVote(helpers.NULL_ADDRESS,50,genericScheme.address);
@@ -44,12 +45,13 @@ const setupGenericSchemeParams = async function(
             contractWhitelist,
             constants.PERIOD_SIZE,
             constants.PERIOD_LIMIT_WEI, 
-            constants.PERIOD_LIMIT_TOKENS);
+            [tokenAddress],
+            [constants.PERIOD_LIMIT_TOKENS]);
   }
   return genericSchemeParams;
 };
 
-const setup = async function (accounts,contractsWhitelist,reputationAccount=0,genesisProtocol = false,tokenAddress=0) {
+const setup = async function (accounts,contractsWhitelist,reputationAccount=0,genesisProtocol = false,tokenAddress) {
    var testSetup = new helpers.TestSetup();
    testSetup.standardTokenMock = await ERC20Mock.new(accounts[1],100);
    testSetup.GenericSchemeMultiCall = await GenericSchemeMultiCall.new();
@@ -362,7 +364,8 @@ contract('GenericSchemeMultiCall', function(accounts) {
             [],
             constants.PERIOD_SIZE,
             constants.PERIOD_LIMIT_WEI, 
-            constants.PERIOD_LIMIT_TOKENS
+            [],
+            []
           );
           assert(false, "contractWhitelist cannot be empty");
         } catch(error) {
@@ -381,7 +384,8 @@ contract('GenericSchemeMultiCall', function(accounts) {
             [accounts[0]],
             constants.PERIOD_SIZE,
             constants.PERIOD_LIMIT_WEI, 
-            constants.PERIOD_LIMIT_TOKENS
+            [],
+            []
           );
           assert(false, "cannot init twice");
         } catch(error) {
@@ -400,7 +404,8 @@ contract('GenericSchemeMultiCall', function(accounts) {
             [accounts[0],accounts[1],accounts[2],accounts[3]],
             constants.PERIOD_SIZE,
             constants.PERIOD_LIMIT_WEI, 
-            constants.PERIOD_LIMIT_TOKENS
+            [],
+            []
         );
         assert.equal(await genericSchemeMultiCall.whitelistedContracts(1),accounts[0]);
         assert.equal(await genericSchemeMultiCall.whitelistedContracts(2),accounts[1]);
@@ -408,17 +413,24 @@ contract('GenericSchemeMultiCall', function(accounts) {
         assert.equal(await genericSchemeMultiCall.whitelistedContracts(4),accounts[3]);
     });
 
-    it.skip("calculated the timebased index correctly", async function() {
-      var actionMock =await ActionMock.new();
+    it.skip("calculates the timebased index correctly", async function() {
+      var actionMock = await ActionMock.new();
       var standardTokenMock = await ERC20Mock.new(accounts[0],1000);
       var testSetup = await setup(accounts,[actionMock.address,accounts[3]],0,true,standardTokenMock.address);
-      /* TODO */ 
-      console.log(moment().unix())
-      var timestamp1 = await testSetup.GenericSchemeMultiCall.observationIndexOf(moment().unix());
-      console.log(timestamp1.toString())
-      console.log(moment().add(31, 'days').unix())
-      var timestamp2 = await testSetup.GenericSchemeMultiCall.observationIndexOf(moment().add(31, 'days').unix());
-      console.log(timestamp2.toString())
+      var genericSchemeMultiCall =await GenericSchemeMultiCall.new();
+        await genericSchemeMultiCall.initialize(
+            testSetup.org.avatar.address,
+            accounts[0],
+            helpers.SOME_HASH,
+            [accounts[0],accounts[1],accounts[2],accounts[3]],
+            constants.PERIOD_SIZE,
+            constants.PERIOD_LIMIT_WEI, 
+            [],
+            []
+        );
+
+      /* TODO */
+      await genericSchemeMultiCall.observationIndexOf(1602102593);      
     });
 
     it("cannot approve more tokens then defined limit in period", async function() {
@@ -427,7 +439,7 @@ contract('GenericSchemeMultiCall', function(accounts) {
       var testSetup = await setup(accounts,[actionMock.address,accounts[3]],0,true,standardTokenMock.address);
       var avatarInst = await new web3.eth.Contract(testSetup.org.avatar.abi,testSetup.org.avatar.address);
       var controllerAddr = await avatarInst.methods.owner().call();
-      var tokenApprovalAmount = 8000000000000000000
+      var tokenApprovalAmount = 8000000000000000000;
       var encodedTokenApproval= await web3.eth.abi.encodeParameters(['address','address', 'uint256'], [standardTokenMock.address, accounts[3], tokenApprovalAmount.toString()]);
       var callData1 = await createCallToActionMock(testSetup.org.avatar.address,actionMock);
       var tx = await testSetup.GenericSchemeMultiCall.proposeCalls(
@@ -476,8 +488,8 @@ contract('GenericSchemeMultiCall', function(accounts) {
       var avatarInst = await new web3.eth.Contract(testSetup.org.avatar.abi,testSetup.org.avatar.address);
       var controllerAddr = await avatarInst.methods.owner().call();
       await web3.eth.sendTransaction({from:accounts[0],to:testSetup.org.avatar.address, value: web3.utils.toWei('10', "ether")});
-      var tokenApprovalAmount = 100
-      var weiAmount = 330000000000000000
+      var tokenApprovalAmount = 100;
+      var weiAmount = 330000000000000000;
       var encodedTokenApproval= await web3.eth.abi.encodeParameters(['address','address', 'uint256'], [standardTokenMock.address, accounts[3], tokenApprovalAmount.toString()]);
       var callData1 = await createCallToActionMock(testSetup.org.avatar.address,actionMock);
       var tx = await testSetup.GenericSchemeMultiCall.proposeCalls(
@@ -519,15 +531,15 @@ contract('GenericSchemeMultiCall', function(accounts) {
       }
     });
 
-    it.skip("can send more ETH after the period passed", async function() {
+    it("can send more ETH after the period passed", async function() {
       var actionMock =await ActionMock.new();
       var standardTokenMock = await ERC20Mock.new(accounts[0],1000);
       var testSetup = await setup(accounts,[actionMock.address,accounts[3]],0,true,standardTokenMock.address);
       var avatarInst = await new web3.eth.Contract(testSetup.org.avatar.abi,testSetup.org.avatar.address);
       var controllerAddr = await avatarInst.methods.owner().call();
-      await web3.eth.sendTransaction({from:accounts[0],to:testSetup.org.avatar.address, value: web3.utils.toWei('10', "ether")});
-      var tokenApprovalAmount = 100
-      var weiAmount = 330000000000000000
+      await web3.eth.sendTransaction({from:accounts[0],to:testSetup.org.avatar.address, value: web3.utils.toWei('100', "ether")});
+      var tokenApprovalAmount = 100;
+      var weiAmount = 330000000000000000;
       var encodedTokenApproval= await web3.eth.abi.encodeParameters(['address','address', 'uint256'], [standardTokenMock.address, accounts[3], tokenApprovalAmount.toString()]);
       var callData1 = await createCallToActionMock(testSetup.org.avatar.address,actionMock);
       var tx = await testSetup.GenericSchemeMultiCall.proposeCalls(
@@ -551,11 +563,12 @@ contract('GenericSchemeMultiCall', function(accounts) {
             assert.equal(events[1].event,"ProposalCallExecuted");
             assert.equal(events[1].args._proposalId,proposalId);
       });
-      await helpers.increaseTime(5678400);
 
+      await helpers.increaseTime(constants.PERIOD_SIZE);
+      
       var tx2 = await testSetup.GenericSchemeMultiCall.proposeCalls(
-        [actionMock.address,controllerAddr],
-        [callData1,encodedTokenApproval],
+        [actionMock.address,actionMock.address],
+        [callData1,callData1],
         [weiAmount.toString(),weiAmount.toString()],
         helpers.NULL_HASH);
       var proposalId = await helpers.getValueFromLogs(tx2, '_proposalId');
