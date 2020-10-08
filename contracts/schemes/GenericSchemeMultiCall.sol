@@ -153,10 +153,10 @@ contract GenericSchemeMultiCall is VotingMachineCallbacks, ProposalExecuteInterf
         bool success;
         Controller controller = Controller(whitelistedContracts[0]);
         uint256 observervationIndex = observationIndexOf(block.timestamp);
+        uint256 spendingWei = 0;
 
         for (uint i = 0; i < proposal.contractsToCall.length; i++) {
-            require(periodSpendingWei[observervationIndex].add(proposal.values[i]) <= periodLimitWei, "periodSpendingWeiExceeded");
-            periodSpendingWei[observervationIndex] = periodSpendingWei[observervationIndex].add(proposal.values[i]);
+            spendingWei = spendingWei.add(proposal.values[i]);
 
             bytes memory callData = proposal.callsData[i];
             if (proposal.contractsToCall[i] == address(controller)) {
@@ -188,6 +188,8 @@ contract GenericSchemeMultiCall is VotingMachineCallbacks, ProposalExecuteInterf
                 genericCallReturnValue
             );
         }
+        
+        require(periodSpendingWei[observervationIndex].add(spendingWei) <= periodLimitWei, "periodSpendingWeiExceeded");
 
         delete proposals[_proposalId];
         emit ProposalDeleted(address(avatar), _proposalId);
